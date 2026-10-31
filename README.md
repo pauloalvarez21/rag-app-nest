@@ -156,9 +156,20 @@ Tablas: `documents` (metadatos), `chunks` (texto y fuente) y `vec_chunks` (`vec0
 npm run start:dev   # desarrollo con watch
 npm run build       # compila a dist/
 npm run start:prod  # ejecuta dist/main
-npm test            # tests unitarios (Jest)
+npm test            # tests unitarios (Jest, 22 tests)
+npm run test:cov    # lo mismo con cobertura
 npm run lint        # ESLint con --fix
 ```
+
+### Tests
+
+Los scripts de npm ejecutan Jest con `--experimental-vm-modules` (ver [errores conocidos](#-errores-conocidos)); usa siempre `npm test` y no llames `jest` directamente.
+
+Las 5 suites (22 tests) no usan la red: los clientes de chat y embeddings se sustituyen por dobles, pero **la base de datos es real** (`sqlite-vec` en memoria) y **los PDF son PDFs de verdad** generados por código, así que se comprueba de punta a punta:
+
+- **Ingesta**: extracción con `pdf-parse`, troceado de 1000/200 verificado contra el texto extraído, inserción de documento + chunks + vectores de 1536 dimensiones, re-subida sin duplicar, PDF corrupto → 400, error de proveedor → 502 y dimensión incorrecta → aviso claro.
+- **Búsqueda vectorial**: KNN real contra `vec0` con `k = 3`, orden por distancia, contexto limitado a los 3 chunks más cercanos, base vacía sin inventar respuesta y traducción de errores de embeddings/chat.
+- **Controllers**: validaciones de entrada (sin archivo, no-PDF, sin pregunta) y respuestas correctas con el servicio mockeado.
 
 ## 🩺 Errores conocidos
 
@@ -173,6 +184,7 @@ npm run lint        # ESLint con --fix
 | `Modelo no disponible en el proveedor` (502) | `OPENAI_MODEL` o `EMBEDDINGS_MODEL` no existe en ese proveedor. | Revisa el nombre exacto del modelo en el catálogo del proveedor. |
 | `Credenciales rechazadas` (502) | La API key pertenece a otro proveedor (p. ej. una clave de Groq en `EMBEDDINGS_API_KEY`). | Usa una clave del proveedor correcto. |
 | `El PDF ... no contiene texto extraíble` (400) | PDF escaneado (solo imágenes). | Requiere OCR, que esta app no incluye. |
+| `Must use import to load ES Module: node_modules/@nestjs/config/dist/index.js` (al ejecutar `npm test`) | `@nestjs/config` es solo ESM y Jest ejecuta los tests como CommonJS; sin más flags, Jest no puede cargarlo. | Resuelto: los scripts de npm lanzan Jest con `node --experimental-vm-modules`. Ejecuta siempre `npm test`, no `jest` a pelo. |
 | `... devolvió N dimensiones, pero la tabla espera FLOAT[1536]` | `EMBEDDINGS_MODEL` no da 1536 dimensiones. | Usa un modelo de 1536 dimensiones o cambia la tabla y reindexa. |
 
 ## 🔁 Reindexar
