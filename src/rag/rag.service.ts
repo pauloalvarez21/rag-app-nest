@@ -78,7 +78,11 @@ export class RagService {
       ORDER BY v.distance
     `,
       )
-      .all(queryBuffer, 3);
+      .all(queryBuffer, 3) as {
+      content: string;
+      source: string;
+      distance: number;
+    }[];
 
     if (results.length === 0) {
       return {
@@ -88,8 +92,8 @@ export class RagService {
     }
 
     // 3. Extraer contexto y fuentes
-    const context = results.map((r: any) => r.content).join('\n\n---\n\n');
-    const sources = [...new Set(results.map((r: any) => r.source))];
+    const context = results.map((r) => r.content).join('\n\n---\n\n');
+    const sources = [...new Set(results.map((r) => r.source))];
 
     // 4. Crear prompt con contexto
     const prompt = `Basándote en el siguiente contexto extraído de documentos, responde la pregunta en español. Si la respuesta no está en el contexto, indícalo claramente.

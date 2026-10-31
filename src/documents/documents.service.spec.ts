@@ -131,6 +131,7 @@ describe('DocumentsService (ingesta real con sqlite-vec)', () => {
 
   it('extrae el texto, lo parte en chunks y guarda documento y vectores', async () => {
     const file = uploadFile(textPdf(longText));
+    await Promise.resolve(file.buffer);
     const result = await service.processAndStorePDF(file);
 
     // pdf-parse añade un marcador de página al final, así que se calcula el

@@ -161,10 +161,9 @@ export class DocumentsService {
     });
     return buffer;
   }
-
   async listDocuments(): Promise<any[]> {
     const db = this.databaseService.getDb();
-    return db
+    return await db
       .prepare('SELECT * FROM documents ORDER BY uploaded_at DESC')
       .all();
   }

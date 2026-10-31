@@ -92,8 +92,7 @@ describe('RagService (búsqueda vectorial real con sqlite-vec)', () => {
     (service as unknown as { embeddings: typeof embeddings }).embeddings =
       embeddings;
     (service as unknown as { llm: typeof llm }).llm = llm;
-  });
-
+    embeddings.embedQuery.mockResolvedValue(vecAt(1));
   afterEach(() => {
     databaseService.onModuleDestroy();
     consoleSpy.mockRestore();
