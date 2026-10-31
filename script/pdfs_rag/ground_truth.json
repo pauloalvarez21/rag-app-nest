@@ -1,0 +1,146 @@
+{
+  "01_rrhh_politicas.pdf": [
+    {
+      "q": "¿Cuántos días de vacaciones tiene un empleado con 5 años de antigüedad?",
+      "a": "20 días (15 + años de antigüedad).",
+      "keywords": [
+        "20 días",
+        "vacaciones",
+        "5 años",
+        "antigüedad"
+      ]
+    },
+    {
+      "q": "¿Cuál es el horario flexible de entrada?",
+      "a": "Entre 07:00 y 09:30.",
+      "keywords": [
+        "07:00",
+        "09:30",
+        "flexible"
+      ]
+    },
+    {
+      "q": "¿Quién aprueba las vacaciones y en cuánto tiempo?",
+      "a": "El jefe directo, con respuesta máxima de 48 horas.",
+      "keywords": [
+        "jefe directo",
+        "48"
+      ]
+    },
+    {
+      "q": "¿A qué hora abre la cafetería?",
+      "a": "De 08:00 a 16:00 en el piso 4.",
+      "keywords": [
+        "08:00",
+        "16:00",
+        "cafetería",
+        "piso 4"
+      ]
+    }
+  ],
+  "02_api_pagos_especificacion.pdf": [
+    {
+      "q": "¿Qué método HTTP se usa para crear un pago?",
+      "a": "POST en /payments.",
+      "keywords": [
+        "POST",
+        "/payments"
+      ]
+    },
+    {
+      "q": "¿Qué código devuelve un rate limit excedido?",
+      "a": "HTTP 429 Too Many Requests.",
+      "keywords": [
+        "429",
+        "Too Many Requests"
+      ]
+    },
+    {
+      "q": "¿Cuál es el rate limit del plan estándar?",
+      "a": "1,000 req/min y 100,000 req/día.",
+      "keywords": [
+        "1,000",
+        "100,000",
+        "estándar"
+      ]
+    },
+    {
+      "q": "¿Qué header indica cuándo reintentar tras un 429?",
+      "a": "Retry-After (en segundos).",
+      "keywords": [
+        "Retry-After",
+        "segundos"
+      ]
+    }
+  ],
+  "03_informe_financiero_q3.pdf": [
+    {
+      "q": "¿Qué línea de negocio creció más en Q3 2025?",
+      "a": "SaaS, con crecimiento superior al 25% YoY.",
+      "keywords": [
+        "SaaS",
+        "25%"
+      ]
+    },
+    {
+      "q": "¿Qué línea se contrajo y por qué?",
+      "a": "Logística, por aumento de costos de combustible.",
+      "keywords": [
+        "Logística",
+        "combustible"
+      ]
+    },
+    {
+      "q": "¿Cuánto mejoró el margen bruto consolidado?",
+      "a": "3.2 puntos porcentuales.",
+      "keywords": [
+        "3.2",
+        "margen"
+      ]
+    },
+    {
+      "q": "¿Las cifras están auditadas?",
+      "a": "No, son no auditadas e incluyen estimaciones.",
+      "keywords": [
+        "no auditadas",
+        "estimaciones"
+      ]
+    }
+  ],
+  "04_faq_soporte.pdf": [
+    {
+      "q": "¿Cuánto dura el enlace para restablecer contraseña?",
+      "a": "30 minutos.",
+      "keywords": [
+        "30 minutos",
+        "enlace"
+      ]
+    },
+    {
+      "q": "¿Cuál es el SLA de urgencias en fin de semana?",
+      "a": "4 horas.",
+      "keywords": [
+        "4 horas",
+        "SLA",
+        "urgencias"
+      ]
+    },
+    {
+      "q": "¿En cuánto tiempo se emite una factura?",
+      "a": "En menos de 48 horas hábiles.",
+      "keywords": [
+        "48",
+        "factura",
+        "hábiles"
+      ]
+    },
+    {
+      "q": "¿Cuándo aplica la cancelación de suscripción?",
+      "a": "Al final del ciclo vigente.",
+      "keywords": [
+        "final del ciclo",
+        "cancelación"
+      ]
+    }
+  ]
+}

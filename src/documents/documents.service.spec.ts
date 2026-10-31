@@ -131,8 +131,17 @@ describe('DocumentsService (ingesta real con sqlite-vec)', () => {
 
   it('extrae el texto, lo parte en chunks y guarda documento y vectores', async () => {
     const file = uploadFile(textPdf(longText));
-    await Promise.resolve(file.buffer);
+    const parser = new PDFParse({ data: file.buffer });
+    let extracted: string;
+    try {
+      extracted = (await parser.getText()).text;
+    } finally {
+      await parser.destroy();
+    }
     const result = await service.processAndStorePDF(file);
+    expect(extracted).toBeTruthy();
+    return result;
+  });
 
     // pdf-parse añade un marcador de página al final, así que se calcula el
     // troceado esperado contra la extracción real, no contra el texto fuente.

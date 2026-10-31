@@ -93,6 +93,8 @@ describe('RagService (búsqueda vectorial real con sqlite-vec)', () => {
       embeddings;
     (service as unknown as { llm: typeof llm }).llm = llm;
     embeddings.embedQuery.mockResolvedValue(vecAt(1));
+  });
+
   afterEach(() => {
     databaseService.onModuleDestroy();
     consoleSpy.mockRestore();
@@ -106,7 +108,6 @@ describe('RagService (búsqueda vectorial real con sqlite-vec)', () => {
       source: 'alfa.pdf',
       vector: vecAt(1),
     });
-    embeddings.embedQuery.mockResolvedValue(vecAt(1));
 
     const result = await service.askQuestion('¿Cada cuánto orbitan?');
 
