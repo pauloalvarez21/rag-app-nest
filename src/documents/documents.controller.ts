@@ -25,8 +25,7 @@ export class DocumentsController {
     }
 
     const isPdf =
-      file.mimetype === 'application/pdf' ||
-      /\.pdf$/i.test(file.originalname);
+      file.mimetype === 'application/pdf' || /\.pdf$/i.test(file.originalname);
 
     if (!isPdf) {
       throw new BadRequestException(

@@ -36,7 +36,10 @@ export function createEmbeddings(
  * Sin esta comprobación, un modelo de otra dimensión falla al insertar con un
  * error de sqlite-vec poco descriptivo ("Dimension mismatch").
  */
-export function assertEmbeddingDimensions(vector: number[], model: string): void {
+export function assertEmbeddingDimensions(
+  vector: number[],
+  model: string,
+): void {
   if (vector.length !== EMBEDDING_DIMENSIONS) {
     throw new InternalServerErrorException(
       `El modelo de embeddings "${model}" devolvió ${vector.length} dimensiones, ` +

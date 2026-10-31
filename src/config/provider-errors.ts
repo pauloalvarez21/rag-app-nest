@@ -56,7 +56,11 @@ export function toHttpException(
     );
   }
 
-  if (err?.status === 401 || err?.status === 403 || err?.code === 'invalid_api_key') {
+  if (
+    err?.status === 401 ||
+    err?.status === 403 ||
+    err?.code === 'invalid_api_key'
+  ) {
     return new HttpException(
       {
         statusCode: HttpStatus.BAD_GATEWAY,

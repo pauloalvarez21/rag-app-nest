@@ -36,7 +36,9 @@ export class RagService {
     this.embeddings = createEmbeddings(this.configService);
   }
 
-  async askQuestion(question: string): Promise<{ answer: string; sources: string[] }> {
+  async askQuestion(
+    question: string,
+  ): Promise<{ answer: string; sources: string[] }> {
     const db = this.databaseService.getDb();
 
     // 1. Generar embedding de la pregunta
@@ -59,7 +61,9 @@ export class RagService {
     // 2. Buscar chunks más similares usando sqlite-vec.
     //    vec0 necesita la KNN en subconsulta con `k = ?`: un LIMIT en la
     //    consulta exterior no le llega al índice virtual y falla.
-    const results = db.prepare(`
+    const results = db
+      .prepare(
+        `
       SELECT 
         c.content,
         c.source,
@@ -72,7 +76,9 @@ export class RagService {
       ) v
       JOIN chunks c ON c.id = v.id
       ORDER BY v.distance
-    `).all(queryBuffer, 3);
+    `,
+      )
+      .all(queryBuffer, 3);
 
     if (results.length === 0) {
       return {

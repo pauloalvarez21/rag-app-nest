@@ -31,7 +31,9 @@ describe('DocumentsController', () => {
       .catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(BadRequestException);
-    expect((error as BadRequestException).message).toContain('Falta el archivo');
+    expect((error as BadRequestException).message).toContain(
+      'Falta el archivo',
+    );
     expect(service.processAndStorePDF).not.toHaveBeenCalled();
   });
 
@@ -45,9 +47,7 @@ describe('DocumentsController', () => {
     const error = await controller.uploadPDF(file).catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(BadRequestException);
-    expect((error as BadRequestException).message).toContain(
-      'no es un PDF',
-    );
+    expect((error as BadRequestException).message).toContain('no es un PDF');
     expect(service.processAndStorePDF).not.toHaveBeenCalled();
   });
 

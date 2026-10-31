@@ -88,9 +88,10 @@ describe('DocumentsService (ingesta real con sqlite-vec)', () => {
   let consoleSpy: jest.SpyInstance;
 
   // Texto lo bastante largo para forzar varios chunks (tamaño 1000, solape 200).
-  const longText = (
+  const longText =
     'Lumina Orbital despliega satelites de observacion terrestre. '
-  ).repeat(60).slice(0, 4000);
+      .repeat(60)
+      .slice(0, 4000);
 
   beforeEach(() => {
     consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => undefined);

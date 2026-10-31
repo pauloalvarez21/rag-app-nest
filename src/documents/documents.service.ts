@@ -34,10 +34,12 @@ export class DocumentsService {
     this.embeddings = createEmbeddings(this.configService);
   }
 
-  async processAndStorePDF(file: Express.Multer.File): Promise<{ id: string; chunks: number }> {
+  async processAndStorePDF(
+    file: Express.Multer.File,
+  ): Promise<{ id: string; chunks: number }> {
     const db = this.databaseService.getDb();
     const filePath = path.join(this.uploadDir, file.originalname);
-    
+
     // 1. Guardar archivo físico
     fs.writeFileSync(filePath, file.buffer);
 
@@ -65,7 +67,7 @@ export class DocumentsService {
 
     // 3. Dividir en chunks
     const chunks = this.splitTextIntoChunks(text, 1000, 200);
-    
+
     // 4. Generar embeddings
     let embeddings: number[][];
     try {
@@ -120,10 +122,10 @@ export class DocumentsService {
 
       chunks.forEach((chunk, index) => {
         const chunkId = `${docId}_chunk_${index}`;
-        
+
         // Insertar chunk
         insertChunk.run(chunkId, docId, chunk, file.originalname);
-        
+
         // Insertar embedding (convertir a buffer)
         const embeddingBuffer = this.float32ArrayToBuffer(embeddings[index]);
         insertEmbedding.run(chunkId, embeddingBuffer);
@@ -135,16 +137,20 @@ export class DocumentsService {
     return { id: docId, chunks: chunks.length };
   }
 
-  private splitTextIntoChunks(text: string, chunkSize: number, overlap: number): string[] {
+  private splitTextIntoChunks(
+    text: string,
+    chunkSize: number,
+    overlap: number,
+  ): string[] {
     const chunks: string[] = [];
     let start = 0;
-    
+
     while (start < text.length) {
       const end = Math.min(start + chunkSize, text.length);
       chunks.push(text.slice(start, end));
       start += chunkSize - overlap;
     }
-    
+
     return chunks;
   }
 
@@ -158,6 +164,8 @@ export class DocumentsService {
 
   async listDocuments(): Promise<any[]> {
     const db = this.databaseService.getDb();
-    return db.prepare('SELECT * FROM documents ORDER BY uploaded_at DESC').all();
+    return db
+      .prepare('SELECT * FROM documents ORDER BY uploaded_at DESC')
+      .all();
   }
 }

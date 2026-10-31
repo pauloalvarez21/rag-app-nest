@@ -125,11 +125,41 @@ describe('RagService (búsqueda vectorial real con sqlite-vec)', () => {
     // Distancias a la consulta vecAt(1): sqrt(2-2x) → alfa 0, beta 0.45,
     // gamma 1, delta 1.41, epsilon 1.73. Solo caben las tres primeras.
     const seeds = [
-      { id: 'a', doc: 'alfa', source: 'alfa.pdf', text: 'contenido alfa', x: 1 },
-      { id: 'b', doc: 'beta', source: 'beta.pdf', text: 'contenido beta', x: 0.9 },
-      { id: 'c', doc: 'gamma', source: 'gamma.pdf', text: 'contenido gamma', x: 0.5 },
-      { id: 'd', doc: 'delta', source: 'delta.pdf', text: 'contenido delta', x: 0 },
-      { id: 'e', doc: 'epsilon', source: 'epsilon.pdf', text: 'contenido epsilon', x: -0.5 },
+      {
+        id: 'a',
+        doc: 'alfa',
+        source: 'alfa.pdf',
+        text: 'contenido alfa',
+        x: 1,
+      },
+      {
+        id: 'b',
+        doc: 'beta',
+        source: 'beta.pdf',
+        text: 'contenido beta',
+        x: 0.9,
+      },
+      {
+        id: 'c',
+        doc: 'gamma',
+        source: 'gamma.pdf',
+        text: 'contenido gamma',
+        x: 0.5,
+      },
+      {
+        id: 'd',
+        doc: 'delta',
+        source: 'delta.pdf',
+        text: 'contenido delta',
+        x: 0,
+      },
+      {
+        id: 'e',
+        doc: 'epsilon',
+        source: 'epsilon.pdf',
+        text: 'contenido epsilon',
+        x: -0.5,
+      },
     ];
     for (const seed of seeds) {
       seedChunk({
@@ -178,9 +208,7 @@ describe('RagService (búsqueda vectorial real con sqlite-vec)', () => {
       message: 'The model `x` does not exist or you do not have access to it.',
     });
 
-    const error = await service
-      .askQuestion('¿Algo?')
-      .catch((e: unknown) => e);
+    const error = await service.askQuestion('¿Algo?').catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(HttpException);
     expect((error as HttpException).getStatus()).toBe(502);
@@ -203,9 +231,7 @@ describe('RagService (búsqueda vectorial real con sqlite-vec)', () => {
       message: 'Invalid API Key',
     });
 
-    const error = await service
-      .askQuestion('¿Algo?')
-      .catch((e: unknown) => e);
+    const error = await service.askQuestion('¿Algo?').catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(HttpException);
     expect((error as HttpException).getStatus()).toBe(502);
@@ -215,13 +241,9 @@ describe('RagService (búsqueda vectorial real con sqlite-vec)', () => {
   });
 
   it('avisa si la consulta devuelve otra dimensión que la tabla', async () => {
-    embeddings.embedQuery.mockResolvedValueOnce(
-      new Array<number>(512).fill(0),
-    );
+    embeddings.embedQuery.mockResolvedValueOnce(new Array<number>(512).fill(0));
 
-    const error = await service
-      .askQuestion('¿Algo?')
-      .catch((e: unknown) => e);
+    const error = await service.askQuestion('¿Algo?').catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(HttpException);
     expect((error as HttpException).getStatus()).toBe(500);
