@@ -161,10 +161,35 @@ export class DocumentsService {
     });
     return buffer;
   }
-  async listDocuments(): Promise<any[]> {
+  listDocuments(): any[] {
     const db = this.databaseService.getDb();
-    return await db
+    return db
       .prepare('SELECT * FROM documents ORDER BY uploaded_at DESC')
       .all();
+  }
+
+  /** Elimina un documento y todos sus chunks y embeddings de la base de datos. */
+  deleteById(id: string): void {
+    const db = this.databaseService.getDb();
+
+    // vec_chunks no tiene foreign key: hay que borrar sus filas por el id de
+    // cada chunk (no por el id del documento).
+    const selectChunkIds = db.prepare(
+      'SELECT id FROM chunks WHERE document_id = ?',
+    );
+    const deleteEmbedding = db.prepare('DELETE FROM vec_chunks WHERE id = ?');
+    const deleteChunks = db.prepare('DELETE FROM chunks WHERE document_id = ?');
+    const deleteDocument = db.prepare('DELETE FROM documents WHERE id = ?');
+
+    const transaction = db.transaction(() => {
+      const chunkIds = selectChunkIds.all(id) as { id: string }[];
+      for (const { id: chunkId } of chunkIds) {
+        deleteEmbedding.run(chunkId);
+      }
+      deleteChunks.run(id);
+      deleteDocument.run(id);
+    });
+
+    transaction();
   }
 }

@@ -116,8 +116,8 @@ describe('DocumentsService (ingesta real con sqlite-vec)', () => {
       embedDocuments: jest.fn(),
       embedQuery: jest.fn(),
     };
-    embeddings.embedDocuments.mockImplementation(async (chunks: string[]) =>
-      chunks.map((_, index) => unitVector(index)),
+    embeddings.embedDocuments.mockImplementation((chunks: string[]) =>
+      Promise.resolve(chunks.map((_, index) => unitVector(index))),
     );
     (service as unknown as { embeddings: typeof embeddings }).embeddings =
       embeddings;
@@ -131,6 +131,9 @@ describe('DocumentsService (ingesta real con sqlite-vec)', () => {
 
   it('extrae el texto, lo parte en chunks y guarda documento y vectores', async () => {
     const file = uploadFile(textPdf(longText));
+
+    // pdf-parse añade un marcador de página al final, así que se calcula el
+    // troceado esperado contra la extracción real, no contra el texto fuente.
     const parser = new PDFParse({ data: file.buffer });
     let extracted: string;
     try {
@@ -138,16 +141,8 @@ describe('DocumentsService (ingesta real con sqlite-vec)', () => {
     } finally {
       await parser.destroy();
     }
-    const result = await service.processAndStorePDF(file);
-    expect(extracted).toBeTruthy();
-    return result;
-  });
 
-    // pdf-parse añade un marcador de página al final, así que se calcula el
-    // troceado esperado contra la extracción real, no contra el texto fuente.
-    const parser = new PDFParse({ data: file.buffer });
-    const extracted = (await parser.getText()).text;
-    await parser.destroy();
+    const result = await service.processAndStorePDF(file);
 
     const db = databaseService.getDb();
     const documents = db
@@ -184,7 +179,7 @@ describe('DocumentsService (ingesta real con sqlite-vec)', () => {
     expect(fs.existsSync(path.join(uploadDir, 'documento_prueba.pdf'))).toBe(
       true,
     );
-    await expect(service.listDocuments()).resolves.toHaveLength(1);
+    expect(service.listDocuments()).toHaveLength(1);
   });
 
   it('reemplaza la versión anterior al re-subir el mismo PDF', async () => {

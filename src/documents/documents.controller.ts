@@ -43,8 +43,7 @@ export class DocumentsController {
   }
 
   @Get()
-  async listDocuments() {
-    const documents = await this.documentsService.listDocuments();
-    return { documents };
+  listDocuments() {
+    return { documents: this.documentsService.listDocuments() };
   }
 }

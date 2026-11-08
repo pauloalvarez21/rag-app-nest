@@ -70,10 +70,10 @@ describe('DocumentsController', () => {
     expect(service.processAndStorePDF).toHaveBeenCalledWith(file);
   });
 
-  it('lista los documentos', async () => {
+  it('lista los documentos', () => {
     const documents = [{ id: 'documento' }];
-    service.listDocuments.mockResolvedValue(documents);
+    service.listDocuments.mockReturnValue(documents);
 
-    await expect(controller.listDocuments()).resolves.toEqual({ documents });
+    expect(controller.listDocuments()).toEqual({ documents });
   });
 });

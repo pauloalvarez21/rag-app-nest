@@ -114,7 +114,7 @@ describe('RagService (búsqueda vectorial real con sqlite-vec)', () => {
     expect(result.answer).toBe('respuesta simulada');
     expect(result.sources).toEqual(['alfa.pdf']);
 
-    const prompt = llm.invoke.mock.calls[0][0] as string;
+    const prompt = (llm.invoke.mock.calls as unknown as [[string]])[0][0];
     expect(prompt).toContain(
       'Los satelites de Lumina orbitan la Tierra en 90 minutos.',
     );
@@ -176,7 +176,7 @@ describe('RagService (búsqueda vectorial real con sqlite-vec)', () => {
 
     expect(result.sources).toEqual(['alfa.pdf', 'beta.pdf', 'gamma.pdf']);
 
-    const prompt = llm.invoke.mock.calls[0][0] as string;
+    const prompt = (llm.invoke.mock.calls as unknown as [[string]])[0][0];
     // Contexto con los 3 chunks (2 separadores) en orden de cercanía.
     expect(prompt.match(/\n\n---\n\n/g)).toHaveLength(2);
     expect(prompt.indexOf('contenido alfa')).toBeLessThan(
