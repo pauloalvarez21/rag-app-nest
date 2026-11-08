@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MulterModule } from '@nestjs/platform-express';
 import { DocumentsService } from './documents.service';
 import { DocumentsController } from './documents.controller';
+import { DirectoryIngestorService } from './directory-ingestor.service';
 
 @Module({
   imports: [
@@ -11,7 +12,7 @@ import { DocumentsController } from './documents.controller';
       },
     }),
   ],
-  providers: [DocumentsService],
+  providers: [DocumentsService, DirectoryIngestorService],
   controllers: [DocumentsController],
 })
 export class DocumentsModule {}

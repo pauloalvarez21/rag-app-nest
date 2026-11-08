@@ -67,6 +67,8 @@ Las marcadas como obligatorias se leen con `getOrThrow`: si falta alguna, el arr
 | `EMBEDDINGS_API_KEY` | ✅ | API key **del proveedor de embeddings** (no la de chat). |
 | `EMBEDDINGS_MODEL` | ➖ | Modelo de embeddings. Por defecto `openai/text-embedding-3-small` (1536 dimensiones). |
 | `PORT` | ➖ | Puerto HTTP. Por defecto `3000`. |
+| `WATCH_DIR` | ➖ | Directorio que monitorea el servicio automático de ingesta (por defecto `UPLOAD_DIR`). Cuando se escribe un PDF ahí, se ingiere sin necesidad de subirlo por API. |
+| `SCAN_INTERVAL_MS` | ➖ | Intervalo, en milisegundos, para el escaneo de respaldo del directorio observado. Por defecto `5000`. |
 
 ## 🔌 Endpoints
 
@@ -125,6 +127,17 @@ curl -X POST http://localhost:3000/rag/ask \
 2. Busca los 3 vecinos más cercanos en `vec_chunks` con KNN (`k = ?`).
 3. Recupera el texto de esos chunks y sus fuentes.
 4. Envía contexto + pregunta al proveedor de chat y devuelve la respuesta.
+
+### Servicio de ingesta automática
+
+El módulo `DocumentsModule` inyecta `DirectoryIngestorService`. Éste monitoriza un directorio (`WATCH_DIR`, por defecto `UPLOAD_DIR`) y, cuando aparece un PDF, lo envía a `DocumentsService.processAndStorePDF(...)` exactamente igual que lo hace `POST /documents/upload`. La ingesta (extraer texto, chunkear, generar embeddings y guardar en `data/rag.db`) es la misma; la única diferencia es que el archivo llega por el sistema de ficheros.
+
+Para activarlo añade al `.env`:
+
+```bash
+WATCH_DIR=./uploads
+SCAN_INTERVAL_MS=5000
+```
 
 ## 🗂️ Estructura del Proyecto
 
