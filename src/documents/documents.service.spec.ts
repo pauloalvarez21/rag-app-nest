@@ -3,8 +3,10 @@ import type { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import JSZip from 'jszip';
 import { PDFParse } from 'pdf-parse';
 import { DocumentsService } from './documents.service';
+import { FileValidationService } from './file-validation.service';
 import { DatabaseService } from '../database/database.service';
 import { EMBEDDING_DIMENSIONS } from '../config/embeddings.config';
 
@@ -61,14 +63,59 @@ function textPdf(text: string): Buffer {
   return Buffer.from(pdf, 'latin1');
 }
 
+function escapeXml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+/** Genera un DOCX mínimo (ZIP OOXML) con un párrafo de texto. */
+async function docxWithText(text: string): Promise<Buffer> {
+  const zip = new JSZip();
+
+  zip.file(
+    '[Content_Types].xml',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '</Types>',
+  );
+  zip.file(
+    '_rels/.rels',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+      '</Relationships>',
+  );
+  zip.file(
+    'word/document.xml',
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+      '<w:body><w:p><w:r><w:t>' +
+      escapeXml(text) +
+      '</w:t></w:r></w:p></w:body></w:document>',
+  );
+
+  return zip.generateAsync<'nodebuffer'>({
+    type: 'nodebuffer',
+    compression: 'DEFLATE',
+  });
+}
+
 function uploadFile(
   buffer: Buffer,
   originalname = 'documento_prueba.pdf',
+  mimetype = 'application/pdf',
 ): Express.Multer.File {
   return {
     originalname,
     buffer,
-    mimetype: 'application/pdf',
+    mimetype,
     size: buffer.length,
   } as unknown as Express.Multer.File;
 }
@@ -102,14 +149,20 @@ describe('DocumentsService (ingesta real con sqlite-vec)', () => {
     );
     databaseService.onModuleInit();
 
+    const config = fakeConfig({
+      UPLOAD_DIR: uploadDir,
+      EMBEDDINGS_API_KEY: 'clave-de-prueba',
+      EMBEDDINGS_BASE_URL: 'http://localhost:9999/v1',
+      EMBEDDINGS_MODEL: 'openai/text-embedding-3-small',
+      ALLOWED_FILE_TYPES: 'pdf,docx,txt,md,html,csv',
+      MAX_FILE_SIZE_MB: '10',
+      MAX_UNCOMPRESSED_MB: '50',
+    });
+
     service = new DocumentsService(
-      fakeConfig({
-        UPLOAD_DIR: uploadDir,
-        EMBEDDINGS_API_KEY: 'clave-de-prueba',
-        EMBEDDINGS_BASE_URL: 'http://localhost:9999/v1',
-        EMBEDDINGS_MODEL: 'openai/text-embedding-3-small',
-      }),
+      config,
       databaseService,
+      new FileValidationService(config),
     );
 
     embeddings = {
@@ -142,12 +195,17 @@ describe('DocumentsService (ingesta real con sqlite-vec)', () => {
       await parser.destroy();
     }
 
-    const result = await service.processAndStorePDF(file);
+    const result = await service.processAndStoreDocument(file);
 
     const db = databaseService.getDb();
     const documents = db
-      .prepare('SELECT id, filename FROM documents')
-      .all() as { id: string; filename: string }[];
+      .prepare('SELECT id, filename, mime_type, extension FROM documents')
+      .all() as {
+      id: string;
+      filename: string;
+      mime_type: string;
+      extension: string;
+    }[];
     const chunks = db
       .prepare('SELECT content, source FROM chunks ORDER BY rowid')
       .all() as { content: string; source: string }[];
@@ -155,12 +213,17 @@ describe('DocumentsService (ingesta real con sqlite-vec)', () => {
       .prepare('SELECT id, embedding FROM vec_chunks')
       .all() as { id: string; embedding: Buffer }[];
 
-    expect(result.id).toBe('documento_prueba');
+    expect(result.id).toBe('documento_prueba-pdf');
     // El texto extraído supera el tamaño de chunk: debe haber varios.
     expect(extracted.length).toBeGreaterThan(1000);
     expect(result.chunks).toBeGreaterThan(1);
     expect(documents).toEqual([
-      { id: 'documento_prueba', filename: 'documento_prueba.pdf' },
+      {
+        id: 'documento_prueba-pdf',
+        filename: 'documento_prueba.pdf',
+        mime_type: 'application/pdf',
+        extension: 'pdf',
+      },
     ]);
     expect(chunks).toHaveLength(result.chunks);
     expect(vectors).toHaveLength(result.chunks);
@@ -182,12 +245,12 @@ describe('DocumentsService (ingesta real con sqlite-vec)', () => {
     expect(service.listDocuments()).toHaveLength(1);
   });
 
-  it('reemplaza la versión anterior al re-subir el mismo PDF', async () => {
+  it('reemplaza la versión anterior al re-subir el mismo documento', async () => {
     const file = uploadFile(textPdf(longText));
 
-    const first = await service.processAndStorePDF(file);
+    const first = await service.processAndStoreDocument(file);
     // Antes fallaba con "UNIQUE constraint failed: documents.id".
-    const second = await service.processAndStorePDF(file);
+    const second = await service.processAndStoreDocument(file);
     expect(second).toEqual(first);
 
     const db = databaseService.getDb();
@@ -204,7 +267,7 @@ describe('DocumentsService (ingesta real con sqlite-vec)', () => {
 
   it('devuelve un error claro ante un PDF corrupto', async () => {
     const error = await service
-      .processAndStorePDF(uploadFile(Buffer.from('esto no es un PDF')))
+      .processAndStoreDocument(uploadFile(Buffer.from('esto no es un PDF')))
       .catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(BadRequestException);
@@ -213,7 +276,7 @@ describe('DocumentsService (ingesta real con sqlite-vec)', () => {
 
   it('rechaza nombres de archivo con rutas (path traversal)', async () => {
     const error = await service
-      .processAndStorePDF(uploadFile(textPdf('contenido'), '../evil.pdf'))
+      .processAndStoreDocument(uploadFile(textPdf('contenido'), '../evil.pdf'))
       .catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(BadRequestException);
@@ -221,14 +284,123 @@ describe('DocumentsService (ingesta real con sqlite-vec)', () => {
     expect(embeddings.embedDocuments).not.toHaveBeenCalled();
   });
 
-  it('rechaza archivos cuya extensión no es .pdf', async () => {
+  it('rechaza extensiones que no están en la allowlist', async () => {
     const error = await service
-      .processAndStorePDF(uploadFile(textPdf('contenido'), 'notas.txt'))
+      .processAndStoreDocument(uploadFile(textPdf('contenido'), 'notas.exe'))
       .catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(BadRequestException);
-    expect((error as BadRequestException).message).toContain('no es un PDF');
+    expect((error as BadRequestException).message).toContain(
+      'no es un tipo de archivo permitido',
+    );
     expect(embeddings.embedDocuments).not.toHaveBeenCalled();
+  });
+
+  it('ingiere un TXT como texto plano', async () => {
+    const result = await service.processAndStoreDocument(
+      uploadFile(Buffer.from(longText), 'notas.txt', 'text/plain'),
+    );
+
+    const db = databaseService.getDb();
+    const document = db
+      .prepare('SELECT id, mime_type, extension FROM documents')
+      .get() as { id: string; mime_type: string; extension: string };
+
+    expect(result.id).toBe('notas-txt');
+    expect(result.chunks).toBeGreaterThan(1);
+    expect(document).toEqual({
+      id: 'notas-txt',
+      mime_type: 'text/plain',
+      extension: 'txt',
+    });
+  });
+
+  it('extrae el texto de un HTML ignorando scripts y estilos', async () => {
+    const html =
+      '<html><body><h1>Lumina</h1>' +
+      '<script>contenido-ignorado</script>' +
+      '<style>.oculto{display:none}</style>' +
+      '<p>satelites de observacion</p></body></html>';
+
+    const result = await service.processAndStoreDocument(
+      uploadFile(Buffer.from(html), 'pagina.html', 'text/html'),
+    );
+
+    const db = databaseService.getDb();
+    const chunks = db.prepare('SELECT content FROM chunks').all() as {
+      content: string;
+    }[];
+    const text = chunks.map((chunk) => chunk.content).join('\n');
+
+    expect(result.id).toBe('pagina-html');
+    expect(text).toContain('Lumina');
+    expect(text).toContain('satelites de observacion');
+    expect(text).not.toContain('contenido-ignorado');
+    expect(text).not.toContain('display:none');
+  });
+
+  it('ingiere un CSV como texto plano', async () => {
+    const result = await service.processAndStoreDocument(
+      uploadFile(
+        Buffer.from('nombre,valor\nLumina,42\n'),
+        'datos.csv',
+        'text/csv',
+      ),
+    );
+
+    const db = databaseService.getDb();
+    const document = db
+      .prepare('SELECT id, mime_type FROM documents')
+      .get() as { id: string; mime_type: string };
+
+    expect(result.id).toBe('datos-csv');
+    expect(document).toEqual({
+      id: 'datos-csv',
+      mime_type: 'text/csv',
+    });
+  });
+
+  it('ingiere un DOCX y guarda el archivo físico', async () => {
+    const buffer = await docxWithText(longText);
+
+    const result = await service.processAndStoreDocument(
+      uploadFile(
+        buffer,
+        'informe.docx',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ),
+    );
+
+    const db = databaseService.getDb();
+    const document = db
+      .prepare('SELECT id, mime_type, extension FROM documents')
+      .get() as { id: string; mime_type: string; extension: string };
+
+    expect(result.id).toBe('informe-docx');
+    expect(result.chunks).toBeGreaterThan(1);
+    expect(document.extension).toBe('docx');
+    expect(document.mime_type).toContain('wordprocessingml');
+    expect(fs.existsSync(path.join(uploadDir, 'informe.docx'))).toBe(true);
+  });
+
+  it('no colisiona al subir el mismo nombre base en PDF y DOCX', async () => {
+    const pdf = await service.processAndStoreDocument(
+      uploadFile(textPdf(longText), 'informe.pdf'),
+    );
+    const docx = await service.processAndStoreDocument(
+      uploadFile(await docxWithText(longText), 'informe.docx'),
+    );
+
+    const db = databaseService.getDb();
+    const ids = (
+      db.prepare('SELECT id FROM documents ORDER BY id').all() as {
+        id: string;
+      }[]
+    ).map((row) => row.id);
+
+    expect(pdf.id).toBe('informe-pdf');
+    expect(docx.id).toBe('informe-docx');
+    expect(ids).toEqual(['informe-docx', 'informe-pdf']);
   });
 
   it('traduce los errores del proveedor de embeddings a un 502 accionable', async () => {
@@ -239,7 +411,7 @@ describe('DocumentsService (ingesta real con sqlite-vec)', () => {
     });
 
     const error = await service
-      .processAndStorePDF(uploadFile(textPdf('texto corto')))
+      .processAndStoreDocument(uploadFile(textPdf('texto corto')))
       .catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(HttpException);
@@ -255,7 +427,7 @@ describe('DocumentsService (ingesta real con sqlite-vec)', () => {
     ]);
 
     const error = await service
-      .processAndStorePDF(uploadFile(textPdf('texto corto')))
+      .processAndStoreDocument(uploadFile(textPdf('texto corto')))
       .catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(HttpException);

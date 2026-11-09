@@ -5,6 +5,13 @@ import * as path from 'path';
 import * as chokidar from 'chokidar';
 
 import { DocumentsService } from './documents.service';
+import {
+  buildDocumentId,
+  detectFileType,
+  FILE_TYPES,
+  FileType,
+  parseAllowedTypes,
+} from './file-types';
 
 /**
  * Servicio que consume documentos escritos en un directorio en lugar de
@@ -28,6 +35,7 @@ export class DirectoryIngestorService implements OnModuleInit {
   private readonly watchDir: string;
   private readonly scanIntervalMs: number;
   private readonly once: boolean;
+  private readonly allowedTypes: Set<FileType>;
 
   private watcher: chokidar.FSWatcher | null = null;
   private timer: NodeJS.Timeout | null = null;
@@ -47,6 +55,10 @@ export class DirectoryIngestorService implements OnModuleInit {
       this.configService.get<number>('SCAN_INTERVAL_MS') ?? 5000;
 
     this.once = this.configService.get<boolean>('WATCH_ONCE') ?? false;
+
+    this.allowedTypes = new Set(
+      parseAllowedTypes(this.configService.get<string>('ALLOWED_FILE_TYPES')),
+    );
 
     this.watchDir = path.resolve(this.watchDir);
   }
@@ -135,14 +147,15 @@ export class DirectoryIngestorService implements OnModuleInit {
 
   /** Elimina el documento de la ingesta cuando desaparece del directorio. */
   private handleUnlink(filePath: string): void {
-    if (!/\.pdf$/i.test(filePath)) {
+    const type = detectFileType(filePath);
+    if (!type || !this.allowedTypes.has(type)) {
       return;
     }
 
     // El evento unlink significa que el sistema operativo ya indicó que el
     // fichero no está más, así que no hay que volver a borrarlo del disco.
     const fileId = path.basename(filePath);
-    const docId = fileId.replace(/\.pdf$/i, '');
+    const docId = buildDocumentId(fileId);
 
     this.removeDocument(docId, fileId);
   }
@@ -184,7 +197,9 @@ export class DirectoryIngestorService implements OnModuleInit {
   /** Procesa un archivo del directorio. */
   private async processFilePath(filePath: string): Promise<void> {
     const fileId = path.basename(filePath);
-    if (!/\.pdf$/i.test(fileId) || this.processed.has(fileId)) {
+    const type = detectFileType(fileId);
+
+    if (!type || !this.allowedTypes.has(type) || this.processed.has(fileId)) {
       return;
     }
 
@@ -209,11 +224,11 @@ export class DirectoryIngestorService implements OnModuleInit {
       const file = {
         originalname: fileId,
         buffer,
-        mimetype: 'application/pdf',
+        mimetype: FILE_TYPES[type].mimeType,
         size: buffer.length,
       } as Express.Multer.File;
 
-      await this.documentsService.processAndStorePDF(file);
+      await this.documentsService.processAndStoreDocument(file);
 
       this.logger.log(`Ingesta completada: ${fileId}`);
     } catch (error) {

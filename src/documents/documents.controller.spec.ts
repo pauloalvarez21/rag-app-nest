@@ -6,7 +6,7 @@ import { DocumentsService } from './documents.service';
 describe('DocumentsController', () => {
   let controller: DocumentsController;
   const service = {
-    processAndStorePDF: jest.fn(),
+    processAndStoreDocument: jest.fn(),
     listDocuments: jest.fn(),
   };
 
@@ -27,33 +27,19 @@ describe('DocumentsController', () => {
 
   it('rechaza la petición si falta el archivo', async () => {
     const error = await controller
-      .uploadPDF(undefined as unknown as Express.Multer.File)
+      .uploadDocument(undefined as unknown as Express.Multer.File)
       .catch((e: unknown) => e);
 
     expect(error).toBeInstanceOf(BadRequestException);
     expect((error as BadRequestException).message).toContain(
       'Falta el archivo',
     );
-    expect(service.processAndStorePDF).not.toHaveBeenCalled();
-  });
-
-  it('rechaza archivos que no son PDF', async () => {
-    const file = {
-      originalname: 'notas.txt',
-      mimetype: 'text/plain',
-      buffer: Buffer.from('texto'),
-    } as unknown as Express.Multer.File;
-
-    const error = await controller.uploadPDF(file).catch((e: unknown) => e);
-
-    expect(error).toBeInstanceOf(BadRequestException);
-    expect((error as BadRequestException).message).toContain('no es un PDF');
-    expect(service.processAndStorePDF).not.toHaveBeenCalled();
+    expect(service.processAndStoreDocument).not.toHaveBeenCalled();
   });
 
   it('devuelve el resultado de la ingesta', async () => {
-    service.processAndStorePDF.mockResolvedValue({
-      id: 'documento',
+    service.processAndStoreDocument.mockResolvedValue({
+      id: 'documento-pdf',
       chunks: 4,
     });
     const file = {
@@ -62,16 +48,16 @@ describe('DocumentsController', () => {
       buffer: Buffer.from('pdf'),
     } as unknown as Express.Multer.File;
 
-    await expect(controller.uploadPDF(file)).resolves.toEqual({
-      message: 'PDF procesado exitosamente',
-      documentId: 'documento',
+    await expect(controller.uploadDocument(file)).resolves.toEqual({
+      message: 'Documento procesado exitosamente',
+      documentId: 'documento-pdf',
       chunks: 4,
     });
-    expect(service.processAndStorePDF).toHaveBeenCalledWith(file);
+    expect(service.processAndStoreDocument).toHaveBeenCalledWith(file);
   });
 
   it('lista los documentos', () => {
-    const documents = [{ id: 'documento' }];
+    const documents = [{ id: 'documento-pdf' }];
     service.listDocuments.mockReturnValue(documents);
 
     expect(controller.listDocuments()).toEqual({ documents });

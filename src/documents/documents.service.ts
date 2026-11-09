@@ -9,7 +9,9 @@ import {
 import { toHttpException } from '../config/provider-errors';
 import * as fs from 'fs';
 import * as path from 'path';
-import { PDFParse } from 'pdf-parse';
+import { buildDocumentId } from './file-types';
+import { FileValidationService } from './file-validation.service';
+import { extractText } from './parsers/extract-text';
 
 @Injectable()
 export class DocumentsService {
@@ -20,6 +22,7 @@ export class DocumentsService {
   constructor(
     private configService: ConfigService,
     private databaseService: DatabaseService,
+    private fileValidation: FileValidationService,
   ) {
     this.uploadDir = this.configService.getOrThrow<string>('UPLOAD_DIR');
     this.embeddingsModel =
@@ -34,49 +37,41 @@ export class DocumentsService {
     this.embeddings = createEmbeddings(this.configService);
   }
 
-  async processAndStorePDF(
+  async processAndStoreDocument(
     file: Express.Multer.File,
   ): Promise<{ id: string; chunks: number }> {
     const db = this.databaseService.getDb();
-    const safeName = this.resolveSafeFilename(file.originalname);
+
+    // 1. Validar nombre, tipo, tamaño, firma y contenido del archivo
+    const { safeName, type, mimeType, extension } =
+      await this.fileValidation.validate(file);
     const filePath = this.resolveUploadPath(safeName);
 
-    if (!this.hasPdfSignature(file.buffer)) {
-      throw new BadRequestException(
-        `No se pudo leer "${safeName}" como PDF: el archivo puede estar ` +
-          'dañado, protegido con contraseña o no ser realmente un PDF.',
-      );
-    }
-
-    // 1. Guardar archivo físico
-    fs.writeFileSync(filePath, file.buffer);
-
-    // 2. Extraer texto del PDF (pdf-parse v2 usa la clase PDFParse)
-    const parser = new PDFParse({ data: file.buffer });
+    // 2. Extraer texto según el formato
     let text: string;
     try {
-      const pdfData = await parser.getText();
-      text = pdfData.text;
+      text = await extractText(type, file.buffer);
     } catch {
       throw new BadRequestException(
-        `No se pudo leer "${safeName}" como PDF: el archivo puede estar ` +
-          'dañado, protegido con contraseña o no ser realmente un PDF.',
+        `No se pudo leer "${safeName}" como ${type.toUpperCase()}: ` +
+          `el archivo puede estar dañado o no ser realmente un ${type.toUpperCase()}.`,
       );
-    } finally {
-      await parser.destroy();
     }
 
     if (!text.trim()) {
       throw new BadRequestException(
-        `El PDF "${safeName}" no contiene texto extraíble. ` +
-          'Si es un documento escaneado necesitaría OCR, que esta app no incluye.',
+        `El documento "${safeName}" no contiene texto extraíble. ` +
+          'Si es un PDF escaneado o una imagen necesitaría OCR, que esta app no incluye.',
       );
     }
 
-    // 3. Dividir en chunks
+    // 3. Guardar archivo físico (solo si se pudo extraer texto)
+    fs.writeFileSync(filePath, file.buffer);
+
+    // 4. Dividir en chunks
     const chunks = this.splitTextIntoChunks(text, 1000, 200);
 
-    // 4. Generar embeddings
+    // 5. Generar embeddings
     let embeddings: number[][];
     try {
       embeddings = await this.embeddings.embedDocuments(chunks);
@@ -91,12 +86,12 @@ export class DocumentsService {
 
     assertEmbeddingDimensions(embeddings[0], this.embeddingsModel);
 
-    // 5. Insertar documento, chunks y embeddings en una sola transacción
-    const docId = safeName.replace(/\.[^.]+$/, '');
+    // 6. Insertar documento, chunks y embeddings en una sola transacción
+    const docId = buildDocumentId(safeName);
 
     const insertDocument = db.prepare(`
-      INSERT INTO documents (id, filename, filepath)
-      VALUES (?, ?, ?)
+      INSERT INTO documents (id, filename, filepath, mime_type, extension)
+      VALUES (?, ?, ?, ?, ?)
     `);
 
     const insertChunk = db.prepare(`
@@ -126,7 +121,7 @@ export class DocumentsService {
       deleteChunks.run(docId);
       deleteDocument.run(docId);
 
-      insertDocument.run(docId, safeName, filePath);
+      insertDocument.run(docId, safeName, filePath, mimeType, extension);
 
       chunks.forEach((chunk, index) => {
         const chunkId = `${docId}_chunk_${index}`;
@@ -145,31 +140,6 @@ export class DocumentsService {
     return { id: docId, chunks: chunks.length };
   }
 
-  /**
-   * Rechaza nombres con rutas o caracteres nulos y exige extensión .pdf.
-   * Evita que un `originalname` malicioso escape del directorio de subidas.
-   */
-  private resolveSafeFilename(originalName: string): string {
-    const safeName = path.basename(originalName);
-
-    if (
-      safeName !== originalName ||
-      safeName === '.' ||
-      safeName === '..' ||
-      safeName.includes('\0')
-    ) {
-      throw new BadRequestException('El nombre del archivo no es válido.');
-    }
-
-    if (!/\.pdf$/i.test(safeName)) {
-      throw new BadRequestException(
-        `"${safeName}" no es un PDF. Solo se aceptan archivos .pdf (máximo 10MB).`,
-      );
-    }
-
-    return safeName;
-  }
-
   /** Resuelve la ruta dentro de UPLOAD_DIR y verifica que no se salga de ella. */
   private resolveUploadPath(safeName: string): string {
     const uploadDir = path.resolve(this.uploadDir);
@@ -180,15 +150,6 @@ export class DocumentsService {
     }
 
     return filePath;
-  }
-
-  private hasPdfSignature(buffer: Buffer | undefined): boolean {
-    const signature = Buffer.from('%PDF-');
-    return (
-      !!buffer &&
-      buffer.length >= signature.length &&
-      buffer.subarray(0, signature.length).equals(signature)
-    );
   }
 
   private splitTextIntoChunks(

@@ -45,15 +45,21 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   }
 
   private initializeTables() {
-    // Tabla de documentos (PDFs subidos)
+    // Tabla de documentos (PDF, DOCX, TXT, MD, HTML y CSV)
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS documents (
         id TEXT PRIMARY KEY,
         filename TEXT NOT NULL,
         filepath TEXT NOT NULL,
+        mime_type TEXT,
+        extension TEXT,
         uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Migración tolerante para bases de datos creadas antes del multi-formato.
+    this.ensureColumn('documents', 'mime_type', 'TEXT');
+    this.ensureColumn('documents', 'extension', 'TEXT');
 
     // Tabla de chunks (fragmentos de texto)
     this.db.exec(`
@@ -74,6 +80,16 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         embedding FLOAT[1536]
       )
     `);
+  }
+
+  private ensureColumn(table: string, column: string, definition: string) {
+    const columns = this.db.prepare(`PRAGMA table_info(${table})`).all() as {
+      name: string;
+    }[];
+
+    if (!columns.some((existing) => existing.name === column)) {
+      this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+    }
   }
 
   getDb(): Database.Database {
