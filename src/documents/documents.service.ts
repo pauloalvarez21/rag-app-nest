@@ -38,7 +38,15 @@ export class DocumentsService {
     file: Express.Multer.File,
   ): Promise<{ id: string; chunks: number }> {
     const db = this.databaseService.getDb();
-    const filePath = path.join(this.uploadDir, file.originalname);
+    const safeName = this.resolveSafeFilename(file.originalname);
+    const filePath = this.resolveUploadPath(safeName);
+
+    if (!this.hasPdfSignature(file.buffer)) {
+      throw new BadRequestException(
+        `No se pudo leer "${safeName}" como PDF: el archivo puede estar ` +
+          'dañado, protegido con contraseña o no ser realmente un PDF.',
+      );
+    }
 
     // 1. Guardar archivo físico
     fs.writeFileSync(filePath, file.buffer);
@@ -51,7 +59,7 @@ export class DocumentsService {
       text = pdfData.text;
     } catch {
       throw new BadRequestException(
-        `No se pudo leer "${file.originalname}" como PDF: el archivo puede estar ` +
+        `No se pudo leer "${safeName}" como PDF: el archivo puede estar ` +
           'dañado, protegido con contraseña o no ser realmente un PDF.',
       );
     } finally {
@@ -60,7 +68,7 @@ export class DocumentsService {
 
     if (!text.trim()) {
       throw new BadRequestException(
-        `El PDF "${file.originalname}" no contiene texto extraíble. ` +
+        `El PDF "${safeName}" no contiene texto extraíble. ` +
           'Si es un documento escaneado necesitaría OCR, que esta app no incluye.',
       );
     }
@@ -84,7 +92,7 @@ export class DocumentsService {
     assertEmbeddingDimensions(embeddings[0], this.embeddingsModel);
 
     // 5. Insertar documento, chunks y embeddings en una sola transacción
-    const docId = file.originalname.replace('.pdf', '');
+    const docId = safeName.replace(/\.[^.]+$/, '');
 
     const insertDocument = db.prepare(`
       INSERT INTO documents (id, filename, filepath)
@@ -118,13 +126,13 @@ export class DocumentsService {
       deleteChunks.run(docId);
       deleteDocument.run(docId);
 
-      insertDocument.run(docId, file.originalname, filePath);
+      insertDocument.run(docId, safeName, filePath);
 
       chunks.forEach((chunk, index) => {
         const chunkId = `${docId}_chunk_${index}`;
 
         // Insertar chunk
-        insertChunk.run(chunkId, docId, chunk, file.originalname);
+        insertChunk.run(chunkId, docId, chunk, safeName);
 
         // Insertar embedding (convertir a buffer)
         const embeddingBuffer = this.float32ArrayToBuffer(embeddings[index]);
@@ -135,6 +143,52 @@ export class DocumentsService {
     insertTransaction();
 
     return { id: docId, chunks: chunks.length };
+  }
+
+  /**
+   * Rechaza nombres con rutas o caracteres nulos y exige extensión .pdf.
+   * Evita que un `originalname` malicioso escape del directorio de subidas.
+   */
+  private resolveSafeFilename(originalName: string): string {
+    const safeName = path.basename(originalName);
+
+    if (
+      safeName !== originalName ||
+      safeName === '.' ||
+      safeName === '..' ||
+      safeName.includes('\0')
+    ) {
+      throw new BadRequestException('El nombre del archivo no es válido.');
+    }
+
+    if (!/\.pdf$/i.test(safeName)) {
+      throw new BadRequestException(
+        `"${safeName}" no es un PDF. Solo se aceptan archivos .pdf (máximo 10MB).`,
+      );
+    }
+
+    return safeName;
+  }
+
+  /** Resuelve la ruta dentro de UPLOAD_DIR y verifica que no se salga de ella. */
+  private resolveUploadPath(safeName: string): string {
+    const uploadDir = path.resolve(this.uploadDir);
+    const filePath = path.resolve(uploadDir, safeName);
+
+    if (!filePath.startsWith(uploadDir + path.sep)) {
+      throw new BadRequestException('El nombre del archivo no es válido.');
+    }
+
+    return filePath;
+  }
+
+  private hasPdfSignature(buffer: Buffer | undefined): boolean {
+    const signature = Buffer.from('%PDF-');
+    return (
+      !!buffer &&
+      buffer.length >= signature.length &&
+      buffer.subarray(0, signature.length).equals(signature)
+    );
   }
 
   private splitTextIntoChunks(

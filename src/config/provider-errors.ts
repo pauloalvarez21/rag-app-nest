@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus } from '@nestjs/common';
+import { HttpException, HttpStatus, Logger } from '@nestjs/common';
 
 interface ProviderErrorContext {
   /** Etiqueta del proveedor, p. ej. "embeddings (EMBEDDINGS_BASE_URL)". */
@@ -11,8 +11,13 @@ interface ProviderErrorContext {
   model?: string;
 }
 
+const logger = new Logger('ProviderErrors');
+
 /**
  * Traduce los errores de los SDK de chat/embeddings a respuestas HTTP claras.
+ *
+ * El detalle original del proveedor se registra en el servidor, pero no se
+ * devuelve al cliente para no filtrar información interna.
  *
  * Los casos reales que evita:
  * - 404 `model_not_found`: el modelo no existe en ese proveedor (típico cuando
@@ -33,6 +38,7 @@ export function toHttpException(
     message?: string;
   };
   const detail = err?.message ?? String(error);
+  logger.error(`Fallo del proveedor de ${ctx.provider}: ${detail}`);
 
   // Cada proveedor lo devuelve distinto: OpenAI/Groq usan 404 + model_not_found,
   // OpenRouter responde 400 con "Model X does not exist".
@@ -50,7 +56,6 @@ export function toHttpException(
           `El proveedor de ${ctx.provider} no reconoce el modelo ` +
           `"${ctx.model ?? '(no configurado)'}". Revisa ${ctx.modelVar} en tu .env ` +
           `y comprueba que el proveedor de ${ctx.provider} sirva ese modelo.`,
-        detail,
       },
       HttpStatus.BAD_GATEWAY,
     );
@@ -68,7 +73,6 @@ export function toHttpException(
         message:
           `El proveedor de ${ctx.provider} rechazó la API key. Revisa ${ctx.apiKeyVar} ` +
           `en tu .env: debe ser una clave del proveedor de ${ctx.provider}, no de otro.`,
-        detail,
       },
       HttpStatus.BAD_GATEWAY,
     );
@@ -79,7 +83,6 @@ export function toHttpException(
       statusCode: HttpStatus.BAD_GATEWAY,
       error: 'Error del proveedor',
       message: `Falló la llamada al proveedor de ${ctx.provider}.`,
-      detail,
     },
     HttpStatus.BAD_GATEWAY,
   );

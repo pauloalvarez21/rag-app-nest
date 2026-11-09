@@ -1,18 +1,13 @@
-import { BadRequestException, Controller, Post, Body } from '@nestjs/common';
+import { Controller, Post, Body } from '@nestjs/common';
 import { RagService } from './rag.service';
+import { AskQuestionDto } from './dto/ask-question.dto';
 
 @Controller('rag')
 export class RagController {
   constructor(private readonly ragService: RagService) {}
 
   @Post('ask')
-  async askQuestion(@Body() body: { question?: string }) {
-    if (!body?.question || body.question.trim() === '') {
-      throw new BadRequestException(
-        'Falta la pregunta: envía un JSON como {"question": "¿De qué trata el documento?"}',
-      );
-    }
-
+  async askQuestion(@Body() body: AskQuestionDto) {
     return this.ragService.askQuestion(body.question);
   }
 }

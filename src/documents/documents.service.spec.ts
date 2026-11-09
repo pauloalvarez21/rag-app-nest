@@ -211,6 +211,26 @@ describe('DocumentsService (ingesta real con sqlite-vec)', () => {
     expect((error as BadRequestException).message).toContain('dañado');
   });
 
+  it('rechaza nombres de archivo con rutas (path traversal)', async () => {
+    const error = await service
+      .processAndStorePDF(uploadFile(textPdf('contenido'), '../evil.pdf'))
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(BadRequestException);
+    expect((error as BadRequestException).message).toContain('no es válido');
+    expect(embeddings.embedDocuments).not.toHaveBeenCalled();
+  });
+
+  it('rechaza archivos cuya extensión no es .pdf', async () => {
+    const error = await service
+      .processAndStorePDF(uploadFile(textPdf('contenido'), 'notas.txt'))
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(BadRequestException);
+    expect((error as BadRequestException).message).toContain('no es un PDF');
+    expect(embeddings.embedDocuments).not.toHaveBeenCalled();
+  });
+
   it('traduce los errores del proveedor de embeddings a un 502 accionable', async () => {
     embeddings.embedDocuments.mockRejectedValueOnce({
       status: 404,

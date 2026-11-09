@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -24,6 +24,7 @@ import { DocumentsService } from './documents.service';
  */
 @Injectable()
 export class DirectoryIngestorService implements OnModuleInit {
+  private readonly logger = new Logger(DirectoryIngestorService.name);
   private readonly watchDir: string;
   private readonly scanIntervalMs: number;
   private readonly once: boolean;
@@ -79,23 +80,20 @@ export class DirectoryIngestorService implements OnModuleInit {
           // archivo en uso. No lo sale por consola mil veces, solo lo cuenta.
           this.errorCount += 1;
           if (this.errorCount <= this.tooManyErrors) {
-            console.warn(
-              `[DirectoryIngestor] watcher EBUSY en ${this.watchDir} (intento ${this.errorCount}/${this.tooManyErrors})`,
+            this.logger.warn(
+              `watcher EBUSY en ${this.watchDir} (intento ${this.errorCount}/${this.tooManyErrors})`,
             );
           }
           return;
         }
 
-        console.error(
-          `[DirectoryIngestor] error observando ${this.watchDir}:`,
-          error,
+        this.logger.error(
+          `Error observando ${this.watchDir}: ${String(error)}`,
         );
       })
       .on('ready', () => {
         this.errorCount = 0;
-        console.log(
-          `[DirectoryIngestor] observando ${this.watchDir} en tiempo real`,
-        );
+        this.logger.log(`Observando ${this.watchDir} en tiempo real`);
       });
 
     if (this.once) {
@@ -132,7 +130,7 @@ export class DirectoryIngestorService implements OnModuleInit {
 
   /** Se llama cuando chokidar detecta un nuevo directorio. */
   private handleAddDir(dirPath: string): void {
-    console.log(`[DirectoryIngestor] directorio añadido: ${dirPath}`);
+    this.logger.log(`Directorio añadido: ${dirPath}`);
   }
 
   /** Elimina el documento de la ingesta cuando desaparece del directorio. */
@@ -155,11 +153,10 @@ export class DirectoryIngestorService implements OnModuleInit {
       this.documentsService.deleteById(docId);
       this.processed.delete(fileId);
 
-      console.log(`[DirectoryIngestor] documento eliminado: ${docId}`);
+      this.logger.log(`Documento eliminado: ${docId}`);
     } catch (error) {
-      console.error(
-        `[DirectoryIngestor] error eliminando el documento ${docId}:`,
-        error,
+      this.logger.error(
+        `Error eliminando el documento ${docId}: ${String(error)}`,
       );
     }
   }
@@ -180,10 +177,7 @@ export class DirectoryIngestorService implements OnModuleInit {
         void this.processFilePath(filePath);
       }
     } catch (error) {
-      console.error(
-        `[DirectoryIngestor] error escaneando ${this.watchDir}:`,
-        error,
-      );
+      this.logger.error(`Error escaneando ${this.watchDir}: ${String(error)}`);
     }
   }
 
@@ -221,11 +215,11 @@ export class DirectoryIngestorService implements OnModuleInit {
 
       await this.documentsService.processAndStorePDF(file);
 
-      console.log(`[DirectoryIngestor] ingesta completada: ${fileId}`);
+      this.logger.log(`Ingesta completada: ${fileId}`);
     } catch (error) {
       // Si falla, se quita del conjunto para reintentarlo en el próximo escaneo.
       this.processed.delete(fileId);
-      console.error(`[DirectoryIngestor] error procesando ${filePath}:`, error);
+      this.logger.error(`Error procesando ${filePath}: ${String(error)}`);
     }
   }
 }

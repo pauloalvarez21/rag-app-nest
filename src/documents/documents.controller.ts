@@ -3,11 +3,16 @@ import {
   Controller,
   Post,
   Get,
+  ParseFilePipe,
+  MaxFileSizeValidator,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { DocumentsService } from './documents.service';
+import { PdfFileValidator } from './pipes/pdf-file.validator';
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 @Controller('documents')
 export class DocumentsController {
@@ -15,12 +20,26 @@ export class DocumentsController {
 
   @Post('upload')
   @UseInterceptors(FileInterceptor('file'))
-  async uploadPDF(@UploadedFile() file: Express.Multer.File) {
+  async uploadPDF(
+    @UploadedFile(
+      new ParseFilePipe({
+        fileIsRequired: true,
+        validators: [
+          new MaxFileSizeValidator({
+            maxSize: MAX_FILE_SIZE,
+            message: 'El PDF no puede superar los 10MB.',
+          }),
+          new PdfFileValidator(),
+        ],
+      }),
+    )
+    file: Express.Multer.File,
+  ) {
     if (!file) {
       throw new BadRequestException(
         'Falta el archivo: envía el PDF en el campo "file" como ' +
           'multipart/form-data. Ejemplo: ' +
-          'curl -X POST http://localhost:3000/documents/upload -F "file=@documento.pdf"',
+          'curl -X POST http://localhost:3000/api/v1/documents/upload -F "file=@documento.pdf"',
       );
     }
 

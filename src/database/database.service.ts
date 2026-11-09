@@ -1,4 +1,9 @@
-import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Database from 'better-sqlite3';
 import vec from 'sqlite-vec';
@@ -7,6 +12,7 @@ import * as path from 'path';
 
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(DatabaseService.name);
   private db: Database.Database;
 
   constructor(private configService: ConfigService) {}
@@ -29,7 +35,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     // Crear tablas
     this.initializeTables();
 
-    console.log('✅ Base de datos SQLite inicializada con sqlite-vec');
+    this.logger.log('Base de datos SQLite inicializada con sqlite-vec');
   }
 
   onModuleDestroy() {
