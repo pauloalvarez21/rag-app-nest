@@ -50,7 +50,7 @@ cp .env.example .env   # y rellena las claves
 npm run start:dev
 ```
 
-La app arranca en `http://localhost:3000` (o `PORT`). Al iniciar crea `data/` y `uploads/` si no existen y muestra `✅ Base de datos SQLite inicializada con sqlite-vec`.
+La app arranca en `http://localhost:3000/api/v1` (o `PORT`). Al iniciar crea `data/` y `uploads/` si no existen y muestra `✅ Base de datos SQLite inicializada con sqlite-vec`.
 
 ### Variables de entorno
 
@@ -67,17 +67,22 @@ Las marcadas como obligatorias se leen con `getOrThrow`: si falta alguna, el arr
 | `EMBEDDINGS_API_KEY` | ✅ | API key **del proveedor de embeddings** (no la de chat). |
 | `EMBEDDINGS_MODEL` | ➖ | Modelo de embeddings. Por defecto `openai/text-embedding-3-small` (1536 dimensiones). |
 | `PORT` | ➖ | Puerto HTTP. Por defecto `3000`. |
+| `CORS_ORIGIN` | ➖ | Orígenes permitidos por CORS, separados por comas. Por defecto `http://localhost:4200`. |
+| `THROTTLE_TTL_MS` | ➖ | Ventana de rate limiting en milisegundos. Por defecto `60000`. |
+| `THROTTLE_LIMIT` | ➖ | Máximo de peticiones por IP y ventana. Por defecto `20`. |
 | `WATCH_DIR` | ➖ | Directorio que monitorea el servicio automático de ingesta (por defecto `UPLOAD_DIR`). Cuando se escribe un PDF ahí, se ingiere sin necesidad de subirlo por API. |
 | `SCAN_INTERVAL_MS` | ➖ | Intervalo, en milisegundos, para el escaneo de respaldo del directorio observado. Por defecto `5000`. |
 
 ## 🔌 Endpoints
 
-### `POST /documents/upload`
+Todos los endpoints viven bajo el prefijo versionado **`/api/v1`**.
 
-Sube un PDF (`multipart/form-data`, campo **`file`**, máximo 10MB). Si el mismo nombre de archivo ya existe, se reemplaza.
+### `POST /api/v1/documents/upload`
+
+Sube un PDF (`multipart/form-data`, campo **`file`**, máximo 10MB). Se valida la firma real del PDF (`%PDF-`) y se rechazan nombres con rutas. Si el mismo nombre de archivo ya existe, se reemplaza.
 
 ```bash
-curl -X POST http://localhost:3000/documents/upload -F "file=@documento.pdf"
+curl -X POST http://localhost:3000/api/v1/documents/upload -F "file=@documento.pdf"
 ```
 
 ```json
@@ -86,20 +91,20 @@ curl -X POST http://localhost:3000/documents/upload -F "file=@documento.pdf"
 
 > No pongas la cabecera `Content-Type` a mano: el cliente debe generarla con su `boundary`. Ver [errores conocidos](#-errores-conocidos).
 
-### `GET /documents`
+### `GET /api/v1/documents`
 
 Lista los documentos indexados, del más reciente al más antiguo.
 
 ```bash
-curl http://localhost:3000/documents
+curl http://localhost:3000/api/v1/documents
 ```
 
-### `POST /rag/ask`
+### `POST /api/v1/rag/ask`
 
-Responde una pregunta usando los 3 chunks más similares como contexto.
+Responde una pregunta usando los 3 chunks más similares como contexto. El body se valida: `question` es obligatorio, no vacío y de máximo 2000 caracteres.
 
 ```bash
-curl -X POST http://localhost:3000/rag/ask \
+curl -X POST http://localhost:3000/api/v1/rag/ask \
   -H "Content-Type: application/json" \
   -d '{"question":"¿De qué trata el documento?"}'
 ```
@@ -130,7 +135,7 @@ curl -X POST http://localhost:3000/rag/ask \
 
 ### Servicio de ingesta automática
 
-El módulo `DocumentsModule` inyecta `DirectoryIngestorService`. Éste monitoriza un directorio (`WATCH_DIR`, por defecto `UPLOAD_DIR`) y, cuando aparece un PDF, lo envía a `DocumentsService.processAndStorePDF(...)` exactamente igual que lo hace `POST /documents/upload`. La ingesta (extraer texto, chunkear, generar embeddings y guardar en `data/rag.db`) es la misma; la única diferencia es que el archivo llega por el sistema de ficheros.
+El módulo `DocumentsModule` inyecta `DirectoryIngestorService`. Éste monitoriza un directorio (`WATCH_DIR`, por defecto `UPLOAD_DIR`) y, cuando aparece un PDF, lo envía a `DocumentsService.processAndStorePDF(...)` exactamente igual que lo hace `POST /api/v1/documents/upload`. La ingesta (extraer texto, chunkear, generar embeddings y guardar en `data/rag.db`) es la misma; la única diferencia es que el archivo llega por el sistema de ficheros.
 
 Para activarlo añade al `.env`:
 
